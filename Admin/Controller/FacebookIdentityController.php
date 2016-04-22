@@ -2,10 +2,13 @@
 
 namespace Octo\FacebookIdentity\Admin\Controller;
 
+use b8\Config;
 use b8\Form\Element\Checkbox;
 use b8\Form\Element\Submit;
 use b8\Form\Element\Text;
 use b8\Form\FieldSet;
+use b8\Http\Response\RedirectResponse;
+use Facebook\Facebook;
 use Octo\Admin\Controller;
 use Octo\Admin\Menu;
 use Octo\Admin\Form as FormElement;
@@ -22,88 +25,76 @@ class FacebookIdentityController extends Controller
         $root->addChild(new Menu\Item('Facebook Identity Settings', '/facebook-identity/settings'));
     }
 
-    public function auth()
+    public function login()
     {
-        $auth = 'login';
+        $appId = Setting::get('facebook-identity', 'app_id');
+        $appSecret = Setting::get('facebook-identity', 'app_secret');
 
-        if (array_key_exists('auth', $_SESSION)) {
-            $auth = $_SESSION['auth'];
+        $facebook = new Facebook([
+            'app_id' => $appId,
+            'app_secret' => $appSecret,
+            'default_graph_version' => 'v2.6',
+        ]);
+
+        $helper = $facebook->getRedirectLoginHelper();
+
+        $token = $helper->getAccessToken();
+
+        $oauth = $facebook->getOAuth2Client();
+
+        if (!$token->isLongLived()) {
+            $token = $oauth->getLongLivedAccessToken($token);
         }
 
-        if ($auth == 'login') {
-            return $this->authLogin();
-        }
-    }
+        Setting::set('facebook-identity', 'access_token', (string)$token);
 
-    protected function authLogin()
-    {
-        $email = $this->getParam('email', '');
-        $token = $this->getParam('token', '');
-
-        $client = new \Google_Client();
-        $client->setClientId(Setting::get('facebook-identity', 'client_id'));
-        $client->setClientSecret(Setting::get('facebook-identity', 'client_secret'));
-        $client->setRedirectUri($this->config->get('site.url').'/'.$this->config->get('site.admin_uri').'/facebook-identity/auth');
-        $client->setScopes('email');
-
-        $data = $client->verifyIdToken($token)->getAttributes();
-
-        if (empty($data['payload']['email']) || $data['payload']['email'] != $email) {
-            $this->errorMessage('There was a problem signing you in, please try again.', true);
-            header('Location: ' . $this->config->get('site.url') . '/' . $this->config->get('site.admin_uri') . '/session/login?unauthorized=1');
-            die;
-        }
-
-        $userStore = Store::get('User');
-        $user = $userStore->getByEmail($email);
-
-        if (is_null($user)) {
-            $authDomains = Setting::get('facebook-identity', 'login_auto_create');
-            $authDomains = explode(',', $authDomains);
-            $parts = explode('@', $email, 2);
-
-            if (!in_array($parts[1], $authDomains)) {
-                $this->errorMessage('You do not have permission to sign in.', true);
-                header('Location: ' . $this->config->get('site.url') . '/' . $this->config->get('site.admin_uri') . '/session/login?unauthorized=1');
-                die;
-            }
-
-            $user = new User();
-            $user->setActive(1);
-            $user->setIsAdmin(1);
-            $user->setDateAdded(new \DateTime());
-            $user->setEmail($email);
-            $user->setName($data['payload']['name']);
-            $user = $userStore->save($user);
-        }
-
-        $_SESSION['user_id'] = $user->getId();
-        $url = '/' . $this->config->get('site.admin_uri');
-
-        if (isset($_SESSION['previous_url'])) {
-            $url = $_SESSION['previous_url'];
-        }
-
-        header('Location: ' . $url);
-        die;
+        $this->response = new RedirectResponse();
+        $this->response->setHeader('Location', '/' . ADMIN_URI . '/facebook-identity/settings');
+        return $this->response;
     }
 
     public function settings()
     {
-        $values = Setting::getForScope('google-identity');
+        $values = Setting::getForScope('facebook-identity');
         $form = $this->settingsForm($values);
 
         if ($this->request->getMethod() == 'POST') {
             $params = $this->getParams();
             $form->setValues($params);
 
-            Setting::setForScope('google-identity', $form->getValues());
+            Setting::setForScope('facebook-identity', $form->getValues());
             $this->successMessage('Settings saved successfully.');
         } else {
             $form->setValues($values);
         }
 
         $this->view->form = $form;
+        $appId = Setting::get('facebook-identity', 'app_id');
+        $appSecret = Setting::get('facebook-identity', 'app_secret');
+        $token = Setting::get('facebook-identity', 'access_token');
+
+        if (!empty($appId) && !empty($appSecret)) {
+            $facebook = new Facebook([
+                'app_id' => $appId,
+                'app_secret' => $appSecret,
+                'default_graph_version' => 'v2.6',
+            ]);
+
+            $helper = $facebook->getRedirectLoginHelper();
+            $permissions = ['email', 'publish_actions', 'user_managed_groups'];
+            $redirect = Config::getInstance()->get('site.url') . '/manage/facebook-identity/login';
+
+            $this->view->loginUrl = $helper->getLoginUrl($redirect, $permissions);
+
+            if (!empty($token)) {
+                try {
+                    $response = $facebook->get('/me', $token);
+                    $this->view->fbUser = $response->getGraphUser()->getName();
+                } catch (\Exception $ex) {
+
+                }
+            }
+        }
     }
 
     protected function settingsForm($values)
@@ -116,26 +107,8 @@ class FacebookIdentityController extends Controller
         $fieldset->setLabel('OAuth Details');
         $form->addField($fieldset);
 
-        $fieldset->addField(Text::create('client_id', 'Client ID'));
-        $fieldset->addField(Text::create('client_secret', 'Client Secret'));
-
-        if (!empty($values['client_id']) && !empty($values['client_secret'])) {
-
-            $fieldset = new FieldSet();
-            $fieldset->setId('login');
-            $fieldset->setLabel('Google Login');
-            $form->addField($fieldset);
-
-            $fieldset->addField(OnOffSwitch::create('login_enabled', 'Enable Google Login?', false));
-            $fieldset->addField(Text::create('login_auto_create', 'Auto-approved login domains:'));
-
-
-            $fieldset = new FieldSet();
-            $fieldset->setId('api');
-            $fieldset->setLabel('Google APIs');
-            $form->addField($fieldset);
-
-        }
+        $fieldset->addField(Text::create('app_id', 'App ID'));
+        $fieldset->addField(Text::create('app_secret', 'App Secret'));
 
         $submit = new Submit();
         $submit->setValue('Save Settings');

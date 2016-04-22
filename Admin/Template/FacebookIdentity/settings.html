@@ -5,5 +5,19 @@
                 {@form}
             </div>
         </div>
+
+
+        {if loginUrl}
+        <div class="box box-success">
+            <div class="box-header">
+                <h3 class="box-title">Log in to allow Facebook API Access</h3>
+            </div>
+            <div class="box-body">
+                {if fbUser}<p>You are currently logged in as <strong>{@fbUser}</strong></p>{/if}
+                <a class="btn btn-success" href="{@loginUrl}">Log in with Facebook</a>
+            </div>
+        </div>
+        {/if}
     </div>
 </div>
+
