@@ -7,7 +7,6 @@ use b8\Form\Element\Checkbox;
 use b8\Form\Element\Submit;
 use b8\Form\Element\Text;
 use b8\Form\FieldSet;
-use b8\Http\Response\RedirectResponse;
 use Facebook\Facebook;
 use Octo\Admin\Controller;
 use Octo\Admin\Menu;
@@ -48,9 +47,7 @@ class FacebookIdentityController extends Controller
 
         Setting::set('facebook-identity', 'access_token', (string)$token);
 
-        $this->response = new RedirectResponse();
-        $this->response->setHeader('Location', '/' . ADMIN_URI . '/facebook-identity/settings');
-        return $this->response;
+        return $this->redirect('/facebook-identity/settings');
     }
 
     public function settings()
