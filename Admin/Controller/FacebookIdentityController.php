@@ -24,6 +24,42 @@ class FacebookIdentityController extends Controller
         $root->addChild(new Menu\Item('Facebook Identity Settings', '/facebook-identity/settings'));
     }
 
+    public function info()
+    {
+        try {
+            $appId = Setting::get('facebook-identity', 'app_id');
+            $appSecret = Setting::get('facebook-identity', 'app_secret');
+            $token = Setting::get('facebook-identity', 'access_token');
+
+            $facebook = new Facebook([
+                'app_id' => $appId,
+                'app_secret' => $appSecret,
+                'default_graph_version' => 'v2.8',
+            ]);
+
+            $response = $facebook->get('/me?fields=id,name,email,picture', $token);
+            $user = $response->getGraphUser();
+
+            return $this->json([
+                'success' => true,
+                'name' => $user['name'],
+                'email' => $user['email'],
+                'photo' => $user['picture']['url'],
+            ]);
+        } catch (\Exception $ex) {
+            return $this->json([
+                'success' => false,
+                'error' => $ex->getMessage(),
+            ]);
+        }
+    }
+
+    public function logout()
+    {
+        Setting::set('facebook-identity', 'access_token', null);
+        return $this->info();
+    }
+
     public function login()
     {
         $appId = Setting::get('facebook-identity', 'app_id');
@@ -52,6 +88,8 @@ class FacebookIdentityController extends Controller
 
     public function settings()
     {
+        $this->setTitle('Facebook Identity');
+
         $values = Setting::getForScope('facebook-identity');
         $form = $this->settingsForm($values);
 
@@ -65,7 +103,7 @@ class FacebookIdentityController extends Controller
             $form->setValues($values);
         }
 
-        $this->view->form = $form;
+        $this->template->form = $form;
         $appId = Setting::get('facebook-identity', 'app_id');
         $appSecret = Setting::get('facebook-identity', 'app_secret');
         $token = Setting::get('facebook-identity', 'access_token');
@@ -81,12 +119,12 @@ class FacebookIdentityController extends Controller
             $permissions = ['email', 'publish_actions', 'user_managed_groups'];
             $redirect = Config::getInstance()->get('site.url') . '/manage/facebook-identity/login';
 
-            $this->view->loginUrl = $helper->getLoginUrl($redirect, $permissions);
+            $this->template->loginUrl = $helper->getLoginUrl($redirect, $permissions);
 
             if (!empty($token)) {
                 try {
                     $response = $facebook->get('/me', $token);
-                    $this->view->fbUser = $response->getGraphUser()->getName();
+                    $this->template->fbUser = $response->getGraphUser()->getName();
                 } catch (\Exception $ex) {
 
                 }
