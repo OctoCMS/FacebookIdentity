@@ -27,9 +27,9 @@ class FacebookIdentityController extends Controller
     public function info()
     {
         try {
-            $appId = Setting::get('facebook-identity', 'app_id');
-            $appSecret = Setting::get('facebook-identity', 'app_secret');
-            $token = Setting::get('facebook-identity', 'access_token');
+            $appId = Setting::getSetting('facebook-identity', 'app_id');
+            $appSecret = Setting::getSetting('facebook-identity', 'app_secret');
+            $token = Setting::getSetting('facebook-identity', 'access_token');
 
             $facebook = new Facebook([
                 'app_id' => $appId,
@@ -62,8 +62,8 @@ class FacebookIdentityController extends Controller
 
     public function login()
     {
-        $appId = Setting::get('facebook-identity', 'app_id');
-        $appSecret = Setting::get('facebook-identity', 'app_secret');
+        $appId = Setting::getSetting('facebook-identity', 'app_id');
+        $appSecret = Setting::getSetting('facebook-identity', 'app_secret');
 
         $facebook = new Facebook([
             'app_id' => $appId,
@@ -104,9 +104,9 @@ class FacebookIdentityController extends Controller
         }
 
         $this->template->form = $form;
-        $appId = Setting::get('facebook-identity', 'app_id');
-        $appSecret = Setting::get('facebook-identity', 'app_secret');
-        $token = Setting::get('facebook-identity', 'access_token');
+        $appId = Setting::getSetting('facebook-identity', 'app_id');
+        $appSecret = Setting::getSetting('facebook-identity', 'app_secret');
+        $token = Setting::getSetting('facebook-identity', 'access_token');
 
         if (!empty($appId) && !empty($appSecret)) {
             $facebook = new Facebook([
